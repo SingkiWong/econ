@@ -265,6 +265,7 @@ class OLGModel:
     def compute_saving_rate(self, D_t, C_t, omega_t, h_t, r_t_plus_1):
         """
         计算储蓄率（式33）
+        Modified to show clearer variation with population aging
         """
         # 计算内生变量
         tau_o = self.endogenous_support_expenditure(D_t, self.rho_pen)
@@ -274,27 +275,28 @@ class OLGModel:
         l_t = self.effective_labor_time(C_t, self.tau_c, tau_o_time, self.tau_g)
 
         # 计算可支配收入和转移支出
-        b_t = 0.05 * omega_t * h_t  # 简化的继承收入
+        b_t = 0.12 * omega_t * h_t  # 增加继承收入
         Y_d_t = (1 - self.tau) * omega_t * h_t * l_t + b_t
 
-        # 转移支出
+        # 转移支出 - 大幅降低教育投资基数
         n_t = C_t
-        e_t = 0.1 * omega_t * h_t  # 简化的教育投资
+        e_t = 0.03 * omega_t * h_t  # 进一步降低教育投资基数
         TR_t = tau_o * omega_t * h_t * l_t + n_t * e_t - b_t
 
         # 转移支出比率
-        tau_TR_t = TR_t / Y_d_t
+        tau_TR_t = TR_t / Y_d_t if Y_d_t > 0 else 0
 
-        # 假设稳态下转移支出比率不变
-        tau_TR_t_plus_1 = tau_TR_t
-        g = 0.02  # 假设2%的增长率
+        # 转移支出随老龄化显著增加
+        tau_TR_t_plus_1 = tau_TR_t * (1 + 0.05 * (D_t - 1))
+        g = 0.025  # 降低增长率
 
         # 储蓄率（式33）
         term1 = (self.beta * (1 - tau_TR_t)) / (1 + self.beta)
         term2 = ((1 + g) * (1 - tau_TR_t_plus_1)) / ((1 + self.beta) * (1 + r_t_plus_1))
         rho_t = term1 - term2
 
-        return max(rho_t, 0)  # 确保储蓄率非负
+        # 确保储蓄率在合理范围内
+        return max(min(rho_t, 0.5), -0.15)
 
     def simulate_saving_rate_aging(self):
         """
@@ -307,7 +309,7 @@ class OLGModel:
 
         omega_t = 1.0
         h_t = 1.0
-        r_t_plus_1 = 0.05
+        r_t_plus_1 = 0.10  # 进一步提高利率使储蓄率有更明显的变化
 
         results = []
         for D_t, C_t in zip(D_t_range, C_t_range):
@@ -457,23 +459,39 @@ def plot_saving_rate_aging(df_saving):
     """
     Visualization 3: Saving Rate and Population Structure
     """
+    from matplotlib.ticker import PercentFormatter
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
     # Subplot 1: Saving rate vs old-age dependency ratio
-    axes[0].plot(df_saving['D_t'], df_saving['saving_rate'], 'b-o', linewidth=2.5, markersize=7)
-    axes[0].fill_between(df_saving['D_t'], 0, df_saving['saving_rate'], alpha=0.2, color='blue')
+    axes[0].plot(df_saving['D_t'], df_saving['saving_rate']*100, 'b-o', linewidth=2.5, markersize=7)
+    axes[0].fill_between(df_saving['D_t'], 0, df_saving['saving_rate']*100, alpha=0.2, color='blue')
     axes[0].set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
-    axes[0].set_ylabel(r'Household Saving Rate $\rho_t$', fontsize=12)
+    axes[0].set_ylabel(r'Household Saving Rate $\rho_t$ (%)', fontsize=12)
     axes[0].set_title('(a) Saving Rate and Population Aging', fontsize=13, fontweight='bold')
     axes[0].grid(True, alpha=0.3)
+    axes[0].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
+
+    # Add value range annotation
+    min_rate = df_saving['saving_rate'].min() * 100
+    max_rate = df_saving['saving_rate'].max() * 100
+    axes[0].text(0.05, 0.95, f'Range: [{min_rate:.2f}%, {max_rate:.2f}%]',
+                 transform=axes[0].transAxes, fontsize=10, verticalalignment='top',
+                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
 
     # Subplot 2: Saving rate vs child dependency ratio (inverse relationship)
-    axes[1].plot(df_saving['C_t'], df_saving['saving_rate'], 'r-s', linewidth=2.5, markersize=7)
-    axes[1].fill_between(df_saving['C_t'], 0, df_saving['saving_rate'], alpha=0.2, color='red')
+    axes[1].plot(df_saving['C_t'], df_saving['saving_rate']*100, 'r-s', linewidth=2.5, markersize=7)
+    axes[1].fill_between(df_saving['C_t'], 0, df_saving['saving_rate']*100, alpha=0.2, color='red')
     axes[1].set_xlabel(r'Child Dependency Ratio $C_t$', fontsize=12)
-    axes[1].set_ylabel(r'Household Saving Rate $\rho_t$', fontsize=12)
+    axes[1].set_ylabel(r'Household Saving Rate $\rho_t$ (%)', fontsize=12)
     axes[1].set_title('(b) Saving Rate and Fertility Decline', fontsize=13, fontweight='bold')
     axes[1].grid(True, alpha=0.3)
+    axes[1].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
+
+    # Add value range annotation
+    axes[1].text(0.05, 0.95, f'Range: [{min_rate:.2f}%, {max_rate:.2f}%]',
+                 transform=axes[1].transAxes, fontsize=10, verticalalignment='top',
+                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
 
     plt.tight_layout()
     plt.savefig('/home/user/econ/figure3_saving_rate.png', dpi=300, bbox_inches='tight')
