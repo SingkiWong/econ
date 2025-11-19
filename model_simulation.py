@@ -10,9 +10,10 @@ from matplotlib import font_manager
 import pandas as pd
 from scipy.optimize import fsolve
 
-# 设置中文字体支持
-matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+# Set matplotlib to use LaTeX-style math text
 matplotlib.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['mathtext.fontset'] = 'dejavuserif'
 
 class OLGModel:
     """
@@ -322,239 +323,234 @@ class OLGModel:
 
 def plot_human_capital_sensitivity(df_hc):
     """
-    可视化1：人力资本积累的时间投入敏感性
+    Visualization 1: Human Capital Accumulation Sensitivity to Time Inputs
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
-    # 准备3D数据
+    # Prepare 3D data
     tau_c_unique = sorted(df_hc['tau_c'].unique())
     tau_g_unique = sorted(df_hc['tau_g'].unique())
 
-    # 子图1：完整模型的热力图
+    # Subplot 1: Heatmap of full model
     pivot_full = df_hc.pivot_table(values='h_t_plus_1', index='tau_g', columns='tau_c')
     im1 = axes[0, 0].contourf(pivot_full.columns, pivot_full.index, pivot_full.values, levels=15, cmap='YlOrRd')
-    axes[0, 0].set_xlabel('子代时间投入 τ_c', fontsize=12)
-    axes[0, 0].set_ylabel('父代时间投入 τ_g', fontsize=12)
-    axes[0, 0].set_title('(a) 人力资本积累水平 h_{t+1}\n（子代与父代共同投入）', fontsize=13, fontweight='bold')
-    plt.colorbar(im1, ax=axes[0, 0])
+    axes[0, 0].set_xlabel(r'Children Time Input $\tau_c$', fontsize=12)
+    axes[0, 0].set_ylabel(r'Grandparents Time Input $\tau_g$', fontsize=12)
+    axes[0, 0].set_title(r'(a) Human Capital Level $h_{t+1}$' + '\n(Joint Time Inputs)', fontsize=13, fontweight='bold')
+    cbar1 = plt.colorbar(im1, ax=axes[0, 0])
+    cbar1.set_label(r'$h_{t+1}$', fontsize=11)
 
-    # 子图2：边际效应对比
-    # 固定一个维度，观察另一个维度的影响
+    # Subplot 2: Marginal effect comparison
     tau_g_fixed = 0.15
     df_fixed_g = df_hc[np.isclose(df_hc['tau_g'], tau_g_fixed, atol=0.01)]
-    axes[0, 1].plot(df_fixed_g['tau_c'], df_fixed_g['h_t_plus_1'], 'b-o', linewidth=2, label='完整模型')
-    axes[0, 1].plot(df_fixed_g['tau_c'], df_fixed_g['h_t_plus_1_only_c'], 'r--s', linewidth=2, label='仅子代投入')
-    axes[0, 1].set_xlabel('子代时间投入 τ_c', fontsize=12)
-    axes[0, 1].set_ylabel('人力资本水平 h_{t+1}', fontsize=12)
-    axes[0, 1].set_title(f'(b) 子代时间投入的边际效应\n（固定父代投入 τ_g={tau_g_fixed}）', fontsize=13, fontweight='bold')
+    axes[0, 1].plot(df_fixed_g['tau_c'], df_fixed_g['h_t_plus_1'], 'b-o', linewidth=2, label='Full Model')
+    axes[0, 1].plot(df_fixed_g['tau_c'], df_fixed_g['h_t_plus_1_only_c'], 'r--s', linewidth=2, label='Children Only')
+    axes[0, 1].set_xlabel(r'Children Time Input $\tau_c$', fontsize=12)
+    axes[0, 1].set_ylabel(r'Human Capital $h_{t+1}$', fontsize=12)
+    axes[0, 1].set_title(f'(b) Marginal Effect of Children Time\n' + r'(Fixed $\tau_g$=' + f'{tau_g_fixed})', fontsize=13, fontweight='bold')
     axes[0, 1].legend(fontsize=11)
     axes[0, 1].grid(True, alpha=0.3)
 
-    # 子图3：互补性分析
+    # Subplot 3: Complementarity analysis
     tau_c_fixed = 0.15
     df_fixed_c = df_hc[np.isclose(df_hc['tau_c'], tau_c_fixed, atol=0.01)]
-    axes[1, 0].plot(df_fixed_c['tau_g'], df_fixed_c['h_t_plus_1'], 'g-o', linewidth=2, label='完整模型')
-    axes[1, 0].plot(df_fixed_c['tau_g'], df_fixed_c['h_t_plus_1_only_g'], 'm--s', linewidth=2, label='仅父代投入')
-    axes[1, 0].set_xlabel('父代时间投入 τ_g', fontsize=12)
-    axes[1, 0].set_ylabel('人力资本水平 h_{t+1}', fontsize=12)
-    axes[1, 0].set_title(f'(c) 父代时间投入的边际效应\n（固定子代投入 τ_c={tau_c_fixed}）', fontsize=13, fontweight='bold')
+    axes[1, 0].plot(df_fixed_c['tau_g'], df_fixed_c['h_t_plus_1'], 'g-o', linewidth=2, label='Full Model')
+    axes[1, 0].plot(df_fixed_c['tau_g'], df_fixed_c['h_t_plus_1_only_g'], 'm--s', linewidth=2, label='Grandparents Only')
+    axes[1, 0].set_xlabel(r'Grandparents Time Input $\tau_g$', fontsize=12)
+    axes[1, 0].set_ylabel(r'Human Capital $h_{t+1}$', fontsize=12)
+    axes[1, 0].set_title(f'(c) Marginal Effect of Grandparents Time\n' + r'(Fixed $\tau_c$=' + f'{tau_c_fixed})', fontsize=13, fontweight='bold')
     axes[1, 0].legend(fontsize=11)
     axes[1, 0].grid(True, alpha=0.3)
 
-    # 子图4：效率差异展示（θ_c vs θ_g）
-    # 计算边际产出
-    df_sorted = df_hc.sort_values('tau_c')
+    # Subplot 4: Efficiency difference (θ_c vs θ_g)
     tau_g_levels = [0.10, 0.15, 0.20]
     for tau_g_val in tau_g_levels:
         df_subset = df_hc[np.isclose(df_hc['tau_g'], tau_g_val, atol=0.01)]
         df_subset = df_subset.sort_values('tau_c')
         axes[1, 1].plot(df_subset['tau_c'], df_subset['h_t_plus_1'],
-                       linewidth=2, marker='o', label=f'τ_g={tau_g_val:.2f}')
+                       linewidth=2, marker='o', label=r'$\tau_g$=' + f'{tau_g_val:.2f}')
 
-    axes[1, 1].set_xlabel('子代时间投入 τ_c', fontsize=12)
-    axes[1, 1].set_ylabel('人力资本水平 h_{t+1}', fontsize=12)
-    axes[1, 1].set_title('(d) 代际时间投入的互补性\n（不同父代投入水平）', fontsize=13, fontweight='bold')
+    axes[1, 1].set_xlabel(r'Children Time Input $\tau_c$', fontsize=12)
+    axes[1, 1].set_ylabel(r'Human Capital $h_{t+1}$', fontsize=12)
+    axes[1, 1].set_title('(d) Intergenerational Time Complementarity\n(Different Grandparent Input Levels)', fontsize=13, fontweight='bold')
     axes[1, 1].legend(fontsize=11)
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig('/home/user/econ/figure1_human_capital.png', dpi=300, bbox_inches='tight')
-    print("✓ 图1已保存: figure1_human_capital.png")
+    print("✓ Figure 1 saved: figure1_human_capital.png")
     return fig
 
 
 def plot_mediation_effects(df_med):
     """
-    可视化2：中介效应分解
+    Visualization 2: Mediation Effects Decomposition
     """
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
 
-    # 子图1：各中介效应的演变
-    axes[0, 0].plot(df_med['D_t'], df_med['direct'], 'b-o', linewidth=2.5, markersize=6, label='直接效应')
-    axes[0, 0].plot(df_med['D_t'], df_med['expenditure_med'], 'r--s', linewidth=2.5, markersize=6, label='赡养支出中介（负）')
-    axes[0, 0].plot(df_med['D_t'], df_med['care_time_med'], 'g-.^', linewidth=2.5, markersize=6, label='照料时间中介（正）')
-    axes[0, 0].plot(df_med['D_t'], df_med['risk_med'], 'm:d', linewidth=2.5, markersize=6, label='赡养风险中介（正）')
+    # Subplot 1: Evolution of each mediation effect
+    axes[0, 0].plot(df_med['D_t'], df_med['direct'], 'b-o', linewidth=2.5, markersize=6, label='Direct Effect')
+    axes[0, 0].plot(df_med['D_t'], df_med['expenditure_med'], 'r--s', linewidth=2.5, markersize=6, label='Support Expenditure (neg)')
+    axes[0, 0].plot(df_med['D_t'], df_med['care_time_med'], 'g-.^', linewidth=2.5, markersize=6, label='Care Time (pos)')
+    axes[0, 0].plot(df_med['D_t'], df_med['risk_med'], 'm:d', linewidth=2.5, markersize=6, label='Support Risk (pos)')
     axes[0, 0].axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
-    axes[0, 0].set_xlabel('赡养比 D_t', fontsize=12)
-    axes[0, 0].set_ylabel('对储蓄率的影响', fontsize=12)
-    axes[0, 0].set_title('(a) 老龄化的中介效应分解', fontsize=13, fontweight='bold')
+    axes[0, 0].set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
+    axes[0, 0].set_ylabel(r'Effect on Saving Rate $\rho_t$', fontsize=12)
+    axes[0, 0].set_title('(a) Mediation Effects of Population Aging', fontsize=13, fontweight='bold')
     axes[0, 0].legend(fontsize=10, loc='best')
     axes[0, 0].grid(True, alpha=0.3)
 
-    # 子图2：总效应及其分解
-    axes[0, 1].plot(df_med['D_t'], df_med['total'], 'k-o', linewidth=3, markersize=7, label='总效应')
+    # Subplot 2: Total effect and its decomposition
+    axes[0, 1].plot(df_med['D_t'], df_med['total'], 'k-o', linewidth=3, markersize=7, label='Total Effect')
     axes[0, 1].fill_between(df_med['D_t'], 0, df_med['total'], alpha=0.2, color='gray')
     axes[0, 1].axhline(y=0, color='black', linestyle='-', linewidth=0.8)
-    axes[0, 1].set_xlabel('赡养比 D_t', fontsize=12)
-    axes[0, 1].set_ylabel('对储蓄率的总效应', fontsize=12)
-    axes[0, 1].set_title('(b) 老龄化对储蓄率的总效应', fontsize=13, fontweight='bold')
+    axes[0, 1].set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
+    axes[0, 1].set_ylabel(r'Total Effect on $\rho_t$', fontsize=12)
+    axes[0, 1].set_title('(b) Total Effect of Aging on Saving Rate', fontsize=13, fontweight='bold')
     axes[0, 1].legend(fontsize=11)
     axes[0, 1].grid(True, alpha=0.3)
 
-    # 子图3：内生变量的演变
+    # Subplot 3: Evolution of endogenous variables
     ax3_1 = axes[1, 0]
     ax3_2 = ax3_1.twinx()
 
-    line1 = ax3_1.plot(df_med['D_t'], df_med['tau_o'], 'b-o', linewidth=2.5, markersize=6, label='赡养支出比例 τ_o')
-    line2 = ax3_1.plot(df_med['D_t'], df_med['tau_o_time'], 'r--s', linewidth=2.5, markersize=6, label='照料时间 τ_o')
-    line3 = ax3_2.plot(df_med['D_t'], df_med['p'], 'g-.^', linewidth=2.5, markersize=6, label='存活概率 p')
+    line1 = ax3_1.plot(df_med['D_t'], df_med['tau_o'], 'b-o', linewidth=2.5, markersize=6, label=r'Support Ratio $\tau_o$')
+    line2 = ax3_1.plot(df_med['D_t'], df_med['tau_o_time'], 'r--s', linewidth=2.5, markersize=6, label=r'Care Time $\tau_o^{time}$')
+    line3 = ax3_2.plot(df_med['D_t'], df_med['p'], 'g-.^', linewidth=2.5, markersize=6, label='Survival Prob. p')
 
-    ax3_1.set_xlabel('赡养比 D_t', fontsize=12)
-    ax3_1.set_ylabel('赡养支出与照料时间', fontsize=12, color='black')
-    ax3_2.set_ylabel('存活概率', fontsize=12, color='g')
-    ax3_1.set_title('(c) 内生赡养行为变量的演变', fontsize=13, fontweight='bold')
+    ax3_1.set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
+    ax3_1.set_ylabel('Support Ratio & Care Time', fontsize=12, color='black')
+    ax3_2.set_ylabel('Survival Probability', fontsize=12, color='g')
+    ax3_1.set_title('(c) Evolution of Endogenous Support Variables', fontsize=13, fontweight='bold')
 
     lines = line1 + line2 + line3
     labels = [l.get_label() for l in lines]
     ax3_1.legend(lines, labels, fontsize=10, loc='upper left')
     ax3_1.grid(True, alpha=0.3)
 
-    # 子图4：堆叠面积图展示中介效应贡献
-    # 为了堆叠，需要将负值和正值分开
-    positive_effects = np.maximum(df_med['direct'], 0) + np.maximum(df_med['care_time_med'], 0) + np.maximum(df_med['risk_med'], 0)
-    negative_effects = np.minimum(df_med['expenditure_med'], 0)
-
-    axes[1, 1].fill_between(df_med['D_t'], 0, df_med['direct'], alpha=0.6, label='直接效应', color='#1f77b4')
+    # Subplot 4: Stacked area chart showing mediation contributions
+    axes[1, 1].fill_between(df_med['D_t'], 0, df_med['direct'], alpha=0.6, label='Direct Effect', color='#1f77b4')
     axes[1, 1].fill_between(df_med['D_t'], df_med['direct'],
                            df_med['direct'] + df_med['care_time_med'],
-                           alpha=0.6, label='照料时间中介', color='#2ca02c')
+                           alpha=0.6, label='Care Time Mediation', color='#2ca02c')
     axes[1, 1].fill_between(df_med['D_t'], df_med['direct'] + df_med['care_time_med'],
                            df_med['direct'] + df_med['care_time_med'] + df_med['risk_med'],
-                           alpha=0.6, label='赡养风险中介', color='#9467bd')
+                           alpha=0.6, label='Support Risk Mediation', color='#9467bd')
     axes[1, 1].fill_between(df_med['D_t'], 0, df_med['expenditure_med'],
-                           alpha=0.6, label='赡养支出中介', color='#d62728')
-    axes[1, 1].plot(df_med['D_t'], df_med['total'], 'k-', linewidth=2.5, label='总效应')
+                           alpha=0.6, label='Expenditure Mediation', color='#d62728')
+    axes[1, 1].plot(df_med['D_t'], df_med['total'], 'k-', linewidth=2.5, label='Total Effect')
 
     axes[1, 1].axhline(y=0, color='black', linestyle='-', linewidth=0.8)
-    axes[1, 1].set_xlabel('赡养比 D_t', fontsize=12)
-    axes[1, 1].set_ylabel('对储蓄率的影响', fontsize=12)
-    axes[1, 1].set_title('(d) 中介效应的累积贡献', fontsize=13, fontweight='bold')
+    axes[1, 1].set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
+    axes[1, 1].set_ylabel(r'Effect on $\rho_t$', fontsize=12)
+    axes[1, 1].set_title('(d) Cumulative Contribution of Mediation Effects', fontsize=13, fontweight='bold')
     axes[1, 1].legend(fontsize=10, loc='best')
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig('/home/user/econ/figure2_mediation_effects.png', dpi=300, bbox_inches='tight')
-    print("✓ 图2已保存: figure2_mediation_effects.png")
+    print("✓ Figure 2 saved: figure2_mediation_effects.png")
     return fig
 
 
 def plot_saving_rate_aging(df_saving):
     """
-    可视化3：储蓄率与人口结构
+    Visualization 3: Saving Rate and Population Structure
     """
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-    # 子图1：储蓄率与赡养比
+    # Subplot 1: Saving rate vs old-age dependency ratio
     axes[0].plot(df_saving['D_t'], df_saving['saving_rate'], 'b-o', linewidth=2.5, markersize=7)
     axes[0].fill_between(df_saving['D_t'], 0, df_saving['saving_rate'], alpha=0.2, color='blue')
-    axes[0].set_xlabel('赡养比 D_t', fontsize=12)
-    axes[0].set_ylabel('家庭储蓄率 ρ_t', fontsize=12)
-    axes[0].set_title('(a) 储蓄率与老龄化程度', fontsize=13, fontweight='bold')
+    axes[0].set_xlabel(r'Old-Age Dependency Ratio $D_t$', fontsize=12)
+    axes[0].set_ylabel(r'Household Saving Rate $\rho_t$', fontsize=12)
+    axes[0].set_title('(a) Saving Rate and Population Aging', fontsize=13, fontweight='bold')
     axes[0].grid(True, alpha=0.3)
 
-    # 子图2：储蓄率与抚养比（反向关系）
+    # Subplot 2: Saving rate vs child dependency ratio (inverse relationship)
     axes[1].plot(df_saving['C_t'], df_saving['saving_rate'], 'r-s', linewidth=2.5, markersize=7)
     axes[1].fill_between(df_saving['C_t'], 0, df_saving['saving_rate'], alpha=0.2, color='red')
-    axes[1].set_xlabel('抚养比 C_t', fontsize=12)
-    axes[1].set_ylabel('家庭储蓄率 ρ_t', fontsize=12)
-    axes[1].set_title('(b) 储蓄率与少子化程度', fontsize=13, fontweight='bold')
+    axes[1].set_xlabel(r'Child Dependency Ratio $C_t$', fontsize=12)
+    axes[1].set_ylabel(r'Household Saving Rate $\rho_t$', fontsize=12)
+    axes[1].set_title('(b) Saving Rate and Fertility Decline', fontsize=13, fontweight='bold')
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig('/home/user/econ/figure3_saving_rate.png', dpi=300, bbox_inches='tight')
-    print("✓ 图3已保存: figure3_saving_rate.png")
+    print("✓ Figure 3 saved: figure3_saving_rate.png")
     return fig
 
 
 def main():
     """
-    主函数：运行所有数值模拟
+    Main Function: Run All Numerical Simulations
     """
     print("="*60)
-    print("数值模拟：人力资本积累与家庭赡养的中介效应")
+    print("Numerical Simulation: Human Capital Accumulation and")
+    print("                      Mediation Effects of Family Support")
     print("="*60)
 
-    # 初始化模型
+    # Initialize model
     model = OLGModel()
 
-    print("\n[1] 模拟人力资本积累对时间投入的敏感性...")
+    print("\n[1] Simulating human capital sensitivity to time inputs...")
     df_hc = model.simulate_human_capital_sensitivity()
-    print(f"    完成！生成{len(df_hc)}个数据点")
+    print(f"    Done! Generated {len(df_hc)} data points")
 
-    print("\n[2] 模拟中介效应随老龄化程度的变化...")
+    print("\n[2] Simulating mediation effects with aging...")
     df_med = model.simulate_mediation_effects()
-    print(f"    完成！生成{len(df_med)}个数据点")
+    print(f"    Done! Generated {len(df_med)} data points")
 
-    print("\n[3] 模拟储蓄率随人口结构的变化...")
+    print("\n[3] Simulating saving rate with population structure...")
     df_saving = model.simulate_saving_rate_aging()
-    print(f"    完成！生成{len(df_saving)}个数据点")
+    print(f"    Done! Generated {len(df_saving)} data points")
 
     print("\n" + "="*60)
-    print("生成可视化图表...")
+    print("Generating visualizations...")
     print("="*60)
 
-    # 生成图表
+    # Generate figures
     fig1 = plot_human_capital_sensitivity(df_hc)
     fig2 = plot_mediation_effects(df_med)
     fig3 = plot_saving_rate_aging(df_saving)
 
-    # 保存数据
-    print("\n保存模拟数据...")
+    # Save data
+    print("\nSaving simulation data...")
     df_hc.to_csv('/home/user/econ/data_human_capital.csv', index=False)
-    print("✓ 数据已保存: data_human_capital.csv")
+    print("✓ Data saved: data_human_capital.csv")
 
     df_med.to_csv('/home/user/econ/data_mediation_effects.csv', index=False)
-    print("✓ 数据已保存: data_mediation_effects.csv")
+    print("✓ Data saved: data_mediation_effects.csv")
 
     df_saving.to_csv('/home/user/econ/data_saving_rate.csv', index=False)
-    print("✓ 数据已保存: data_saving_rate.csv")
+    print("✓ Data saved: data_saving_rate.csv")
 
     print("\n" + "="*60)
-    print("模拟结果总结")
+    print("SIMULATION RESULTS SUMMARY")
     print("="*60)
 
-    # 输出关键结果
-    print("\n【1. 人力资本积累】")
-    print(f"  • 子代效率参数 θ_c = {model.theta_c:.2f}")
-    print(f"  • 父代效率参数 θ_g = {model.theta_g:.2f}")
-    print(f"  • 效率比 θ_c/θ_g = {model.theta_c/model.theta_g:.2f}")
-    print(f"  • 人力资本范围: [{df_hc['h_t_plus_1'].min():.3f}, {df_hc['h_t_plus_1'].max():.3f}]")
+    # Output key results
+    print("\n[1. Human Capital Accumulation]")
+    print(f"  • Children efficiency parameter theta_c = {model.theta_c:.2f}")
+    print(f"  • Grandparents efficiency parameter theta_g = {model.theta_g:.2f}")
+    print(f"  • Efficiency ratio theta_c/theta_g = {model.theta_c/model.theta_g:.2f}")
+    print(f"  • Human capital range: [{df_hc['h_t_plus_1'].min():.3f}, {df_hc['h_t_plus_1'].max():.3f}]")
 
-    print("\n【2. 中介效应分解】（在赡养比D_t=1.0时）")
+    print("\n[2. Mediation Effects Decomposition] (at D_t=1.0)")
     idx_mid = len(df_med) // 2
-    print(f"  • 直接效应: {df_med.loc[idx_mid, 'direct']:.5f}")
-    print(f"  • 赡养支出中介: {df_med.loc[idx_mid, 'expenditure_med']:.5f} (负向)")
-    print(f"  • 照料时间中介: {df_med.loc[idx_mid, 'care_time_med']:.5f} (正向)")
-    print(f"  • 赡养风险中介: {df_med.loc[idx_mid, 'risk_med']:.5f} (正向)")
-    print(f"  • 总效应: {df_med.loc[idx_mid, 'total']:.5f}")
+    print(f"  • Direct effect: {df_med.loc[idx_mid, 'direct']:.5f}")
+    print(f"  • Support expenditure mediation: {df_med.loc[idx_mid, 'expenditure_med']:.5f} (negative)")
+    print(f"  • Care time mediation: {df_med.loc[idx_mid, 'care_time_med']:.5f} (positive)")
+    print(f"  • Support risk mediation: {df_med.loc[idx_mid, 'risk_med']:.5f} (positive)")
+    print(f"  • Total effect: {df_med.loc[idx_mid, 'total']:.5f}")
 
-    print("\n【3. 储蓄率】")
-    print(f"  • 最低储蓄率: {df_saving['saving_rate'].min():.4f} (低度老龄化)")
-    print(f"  • 最高储蓄率: {df_saving['saving_rate'].max():.4f} (高度老龄化)")
-    print(f"  • 平均储蓄率: {df_saving['saving_rate'].mean():.4f}")
+    print("\n[3. Saving Rate]")
+    print(f"  • Minimum saving rate: {df_saving['saving_rate'].min():.4f} (low aging)")
+    print(f"  • Maximum saving rate: {df_saving['saving_rate'].max():.4f} (high aging)")
+    print(f"  • Average saving rate: {df_saving['saving_rate'].mean():.4f}")
 
     print("\n" + "="*60)
-    print("所有模拟完成！")
+    print("ALL SIMULATIONS COMPLETED!")
     print("="*60)
 
     return df_hc, df_med, df_saving
