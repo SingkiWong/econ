@@ -398,6 +398,159 @@ class OLGModel:
 
         return pd.DataFrame(results)
 
+    def compute_fertility_mediation_effects(self, n_t, omega_t, h_t, r_t_plus_1, Y_d_t):
+        """
+        Calculate mediation effects of fertility decline on saving rates (Chapter 6)
+        计算少子化对储蓄率的中介效应（第六章）
+
+        Based on theoretical decomposition:
+        dρ_t/dn_t = Direct + Future Aging + Per Capita Resources + Human Capital
+
+        Returns:
+            Dictionary with 5 effects: direct, future_aging_med, per_capita_med, human_capital_med, total
+        """
+        # Calculate endogenous variables
+        D_t = 1.0 / self.n_t_minus_1  # Current old-age dependency
+        tau_o = self.endogenous_support_expenditure(D_t, self.rho_pen)
+        tau_o_time = self.endogenous_care_time(D_t, self.H_t)
+
+        # Calculate labor time
+        l_t = self.effective_labor_time(n_t, self.tau_c, tau_o_time, self.tau_g)
+
+        # 1. DIRECT EFFECT (Equation 66-67)
+        # ∂s_t/∂n_t = -β/[(1+β)]·[(1-τ-τ_o)·ω·h·τ_c + e_t]
+        e_t = 0.03 * omega_t * h_t  # Per-child education investment
+        term_direct = (1 - self.tau - tau_o) * omega_t * h_t * self.tau_c + e_t
+        d_s_d_n_direct = -(self.beta / (1 + self.beta)) * term_direct
+        direct_effect = d_s_d_n_direct / Y_d_t
+
+        # 2. FUTURE AGING EXPECTATION MEDIATION (Equation 71-75)
+        # ∂s_t/∂n_t|expectation = [μ_1·ω_{t+1}·h_{t+1}·l_{t+1} / ((1+β)(1+r))] · (-1/n_t²)
+        # Future old-age dependency: D_{t+1} = 1/n_t
+        # ∂D_{t+1}/∂n_t = -1/n_t²
+        d_D_future_d_n = -1.0 / (n_t ** 2)
+
+        # ∂E[TR_{t+1}]/∂D_{t+1} = μ_1·ω·h·l (assuming future income similar to current)
+        d_TR_future_d_D = self.mu_1 * omega_t * h_t * l_t
+
+        # ∂s_t/∂E[TR_{t+1}] = 1/[(1+β)(1+r)]
+        d_s_d_TR_future = 1.0 / ((1 + self.beta) * (1 + r_t_plus_1))
+
+        future_aging_med = (d_s_d_TR_future * d_TR_future_d_D * d_D_future_d_n) / Y_d_t
+
+        # 3. PER CAPITA RESOURCES MEDIATION (Equation 76-77)
+        # y^per_capita = (Y_d - TR) / (1 + n_t + D_t)
+        # ∂y^per_capita/∂n_t < 0 (family size effect)
+        TR_t = tau_o * omega_t * h_t * l_t + n_t * e_t
+        N_family = 1 + n_t + D_t
+
+        # ∂Y_d/∂n_t = -(1-τ)·ω·h·τ_c (labor time reduction)
+        d_Yd_d_n = -(1 - self.tau) * omega_t * h_t * self.tau_c
+
+        # ∂TR/∂n_t ≈ e_t (dominant term)
+        d_TR_d_n = e_t
+
+        # ∂y^per_capita/∂n_t (using quotient rule)
+        numerator = N_family * (d_Yd_d_n - d_TR_d_n) - (Y_d_t - TR_t)
+        d_y_per_capita_d_n = numerator / (N_family ** 2)
+
+        # ∂ρ_t/∂y^per_capita ≈ β/[(1+β)·Y_d] (marginal propensity to save)
+        d_rho_d_y_per_capita = self.beta / ((1 + self.beta) * Y_d_t)
+
+        per_capita_med = d_rho_d_y_per_capita * d_y_per_capita_d_n
+
+        # 4. HUMAN CAPITAL INVESTMENT MEDIATION (Equation 78-79)
+        # Becker's quality-quantity tradeoff: e_t = E_t/n_t
+        # ∂e_t/∂n_t = -E_t/n_t² (if total education budget E_t is fixed)
+        # ∂h_{t+1}/∂e_t = β_h · h_{t+1}/e_t
+        E_total = n_t * e_t  # Total education budget
+        d_e_d_n = -E_total / (n_t ** 2)
+
+        # From human capital function (Equation 1)
+        h_t_plus_1 = self.human_capital_accumulation(h_t, e_t, self.tau_c, self.tau_g)
+        d_h_future_d_e = self.beta_h * h_t_plus_1 / e_t if e_t > 0 else 0
+        d_h_future_d_n = d_h_future_d_e * d_e_d_n
+
+        # ∂ρ_t/∂h_{t+1}: Higher future human capital → higher future income → affects saving
+        # This is a long-term effect, approximate with income effect
+        d_rho_d_h_future = 0.05 * self.beta / ((1 + self.beta) * Y_d_t)  # Scaled effect
+
+        human_capital_med = d_rho_d_h_future * d_h_future_d_n
+
+        # 5. TOTAL EFFECT (Equation 80-81)
+        total_effect = direct_effect + future_aging_med + per_capita_med + human_capital_med
+
+        return {
+            'direct_effect': direct_effect,
+            'future_aging_mediation': future_aging_med,
+            'per_capita_mediation': per_capita_med,
+            'human_capital_mediation': human_capital_med,
+            'total_effect': total_effect,
+            # Additional info for visualization
+            'n_t': n_t,
+            'C_t': n_t,
+            'D_future': 1.0 / n_t,
+            'per_capita_income': (Y_d_t - TR_t) / (1 + n_t + D_t),
+            'per_child_education': e_t
+        }
+
+    def simulate_fertility_mediation_effects(self):
+        """
+        Simulation 6: Mediation Effects of Fertility Decline on Saving Rates
+        模拟6：少子化对储蓄率的中介效应分解
+
+        Demonstrates how fertility decline affects saving rates through 4 channels:
+        1. Direct effect (childcare expenditure & labor time)
+        2. Future aging expectation mediation
+        3. Per capita resources mediation
+        4. Human capital investment mediation
+        """
+        # Fertility rate range: from high (2.0) to low (0.5)
+        # 生育率范围：从高生育率（2.0）到低生育率（0.5）
+        n_t_range = np.linspace(2.0, 0.5, 30)
+
+        # Assume other variables
+        omega_t = 1.0
+        h_t = 1.0
+        r_t_plus_1 = 0.10
+
+        results = {
+            'n_t': [],
+            'C_t': [],
+            'direct': [],
+            'future_aging_med': [],
+            'per_capita_med': [],
+            'human_capital_med': [],
+            'total': [],
+            'D_future': [],
+            'per_capita_income': [],
+            'per_child_education': []
+        }
+
+        for n_t in n_t_range:
+            # Calculate disposable income (varies with n_t through labor time)
+            D_t = 1.0 / self.n_t_minus_1
+            tau_o = self.endogenous_support_expenditure(D_t, self.rho_pen)
+            tau_o_time = self.endogenous_care_time(D_t, self.H_t)
+            l_t = self.effective_labor_time(n_t, self.tau_c, tau_o_time, self.tau_g)
+
+            Y_d_t = (1 - self.tau) * omega_t * h_t * l_t + 0.05 * omega_t * h_t
+
+            effects = self.compute_fertility_mediation_effects(n_t, omega_t, h_t, r_t_plus_1, Y_d_t)
+
+            results['n_t'].append(n_t)
+            results['C_t'].append(effects['C_t'])
+            results['direct'].append(effects['direct_effect'])
+            results['future_aging_med'].append(effects['future_aging_mediation'])
+            results['per_capita_med'].append(effects['per_capita_mediation'])
+            results['human_capital_med'].append(effects['human_capital_mediation'])
+            results['total'].append(effects['total_effect'])
+            results['D_future'].append(effects['D_future'])
+            results['per_capita_income'].append(effects['per_capita_income'])
+            results['per_child_education'].append(effects['per_child_education'])
+
+        return pd.DataFrame(results)
+
     def simulate_ai_labor_substitution(self):
         """
         Simulation 5: AI Development Reduces Saving Rate via Labor Substitution
@@ -732,6 +885,113 @@ def plot_fertility_decline_aging(df_fert):
     return fig
 
 
+def plot_fertility_mediation_effects(df_fert_med):
+    """
+    Visualization 6: Mediation Effects of Fertility Decline on Saving Rates
+    可视化6：少子化对储蓄率的中介效应分解
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    # Subplot 1: Mediation effects decomposition
+    ax1 = axes[0, 0]
+
+    # Plot each mediation channel
+    ax1.plot(df_fert_med['n_t'], df_fert_med['direct'], 'b-', linewidth=2.5, marker='o', markersize=4, label='Direct Effect')
+    ax1.plot(df_fert_med['n_t'], df_fert_med['future_aging_med'], 'r--', linewidth=2.5, marker='s', markersize=4, label='Future Aging Mediation')
+    ax1.plot(df_fert_med['n_t'], df_fert_med['per_capita_med'], 'g-.', linewidth=2.5, marker='^', markersize=4, label='Per Capita Resources Mediation')
+    ax1.plot(df_fert_med['n_t'], df_fert_med['human_capital_med'], 'm:', linewidth=2.5, marker='d', markersize=4, label='Human Capital Mediation')
+    ax1.plot(df_fert_med['n_t'], df_fert_med['total'], 'k-', linewidth=3, marker='*', markersize=6, label='Total Effect')
+
+    ax1.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax1.set_xlabel('Fertility Rate $n_t$', fontsize=12)
+    ax1.set_ylabel(r'Effect on Saving Rate $\partial\rho_t/\partial n_t$', fontsize=12)
+    ax1.set_title('(a) Four-Channel Mediation Decomposition', fontsize=13, fontweight='bold')
+    ax1.legend(fontsize=10, loc='upper left')
+    ax1.grid(True, alpha=0.3)
+    ax1.invert_xaxis()  # Invert x-axis so fertility decline (left to right) shows increasing effect
+
+    # Add annotation for key finding
+    ax1.text(0.6, 0.05, 'All channels reinforce:\nFertility decline → Saving rate ↑',
+             transform=ax1.transAxes, fontsize=11, verticalalignment='bottom',
+             bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.3))
+
+    # Subplot 2: Stacked bar chart showing relative contributions
+    ax2 = axes[0, 1]
+
+    # Calculate percentage contributions for n_t=0.5 (low fertility scenario)
+    idx_low_fert = df_fert_med['n_t'].idxmin()  # Find index of minimum n_t
+    direct_val = df_fert_med.loc[idx_low_fert, 'direct']
+    future_aging_val = df_fert_med.loc[idx_low_fert, 'future_aging_med']
+    per_capita_val = df_fert_med.loc[idx_low_fert, 'per_capita_med']
+    human_capital_val = df_fert_med.loc[idx_low_fert, 'human_capital_med']
+    total_val = df_fert_med.loc[idx_low_fert, 'total']
+
+    # Calculate percentages
+    contributions = [direct_val, future_aging_val, per_capita_val, human_capital_val]
+    labels = ['Direct', 'Future\nAging', 'Per Capita\nResources', 'Human\nCapital']
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+
+    bars = ax2.bar(labels, contributions, color=colors, alpha=0.7, edgecolor='black', linewidth=1.5)
+
+    ax2.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+    ax2.set_ylabel(r'Contribution to $d\rho_t/dn_t$ at $n_t=0.5$', fontsize=12)
+    ax2.set_title('(b) Channel Contributions at Low Fertility', fontsize=13, fontweight='bold')
+    ax2.grid(True, alpha=0.3, axis='y')
+
+    # Add value labels on bars
+    for bar, val in zip(bars, contributions):
+        height = bar.get_height()
+        ax2.text(bar.get_x() + bar.get_width()/2., height,
+                f'{val:.4f}',
+                ha='center', va='bottom' if height > 0 else 'top', fontsize=10)
+
+    # Subplot 3: Future old-age dependency and per capita income
+    ax3_1 = axes[1, 0]
+    ax3_2 = ax3_1.twinx()
+
+    line1 = ax3_1.plot(df_fert_med['n_t'], df_fert_med['D_future'], 'b-', linewidth=2.5, label='Future Old-Age Dependency $D_{t+1}$')
+    line2 = ax3_2.plot(df_fert_med['n_t'], df_fert_med['per_capita_income'], 'r--', linewidth=2.5, label='Per Capita Income')
+
+    ax3_1.set_xlabel('Fertility Rate $n_t$', fontsize=12)
+    ax3_1.set_ylabel('Future Dependency $D_{t+1} = 1/n_t$', fontsize=12, color='b')
+    ax3_2.set_ylabel('Per Capita Income', fontsize=12, color='r')
+    ax3_1.set_title('(c) Mechanisms: Aging Expectation & Resource Concentration', fontsize=13, fontweight='bold')
+    ax3_1.tick_params(axis='y', labelcolor='b')
+    ax3_2.tick_params(axis='y', labelcolor='r')
+    ax3_1.invert_xaxis()
+
+    lines = line1 + line2
+    labels_legend = [l.get_label() for l in lines]
+    ax3_1.legend(lines, labels_legend, fontsize=10, loc='upper left')
+    ax3_1.grid(True, alpha=0.3)
+
+    # Subplot 4: Per-child education investment (quality-quantity tradeoff)
+    ax4 = axes[1, 1]
+
+    ax4.plot(df_fert_med['n_t'], df_fert_med['per_child_education'], 'purple', linewidth=2.5, marker='o', markersize=5)
+    ax4.fill_between(df_fert_med['n_t'], 0, df_fert_med['per_child_education'], alpha=0.2, color='purple')
+
+    ax4.set_xlabel('Fertility Rate $n_t$', fontsize=12)
+    ax4.set_ylabel('Per-Child Education Investment $e_t$', fontsize=12)
+    ax4.set_title('(d) Becker Quality-Quantity Tradeoff', fontsize=13, fontweight='bold')
+    ax4.grid(True, alpha=0.3)
+    ax4.invert_xaxis()
+
+    # Add annotation
+    e_at_high_fert = df_fert_med.loc[df_fert_med['n_t'].idxmax(), 'per_child_education']
+    e_at_low_fert = df_fert_med.loc[df_fert_med['n_t'].idxmin(), 'per_child_education']
+    increase_pct = (e_at_low_fert / e_at_high_fert - 1) * 100
+
+    ax4.text(0.6, 0.95, f'Fertility 2.0→0.5:\nEducation per child ↑{increase_pct:.0f}%',
+             transform=ax4.transAxes, fontsize=11, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
+
+    plt.tight_layout()
+    plt.savefig('/home/user/econ/figure6_fertility_mediation.png', dpi=300, bbox_inches='tight')
+    print("✓ Figure 6 saved: figure6_fertility_mediation.png")
+    return fig
+
+
 def plot_ai_labor_substitution(df_ai):
     """
     Visualization 5: AI Development Reduces Saving Rate via Labor Substitution
@@ -840,6 +1100,10 @@ def main():
     df_ai = model.simulate_ai_labor_substitution()
     print(f"    Done! Generated {len(df_ai)} data points")
 
+    print("\n[6] Simulating fertility decline mediation effects...")
+    df_fert_med = model.simulate_fertility_mediation_effects()
+    print(f"    Done! Generated {len(df_fert_med)} data points")
+
     print("\n" + "="*60)
     print("Generating visualizations...")
     print("="*60)
@@ -850,6 +1114,7 @@ def main():
     fig3 = plot_saving_rate_aging(df_saving)
     fig4 = plot_fertility_decline_aging(df_fert)
     fig5 = plot_ai_labor_substitution(df_ai)
+    fig6 = plot_fertility_mediation_effects(df_fert_med)
 
     # Save data
     print("\nSaving simulation data...")
@@ -867,6 +1132,9 @@ def main():
 
     df_ai.to_csv('/home/user/econ/data_ai_substitution.csv', index=False)
     print("✓ Data saved: data_ai_substitution.csv")
+
+    df_fert_med.to_csv('/home/user/econ/data_fertility_mediation.csv', index=False)
+    print("✓ Data saved: data_fertility_mediation.csv")
 
     print("\n" + "="*60)
     print("SIMULATION RESULTS SUMMARY")
@@ -906,12 +1174,29 @@ def main():
     print(f"  • Employment rate decline: 100% → {df_ai.loc[len(df_ai)-1, 'employment_rate']*100:.1f}%")
     print(f"  • Disposable income loss: {(1-df_ai.loc[len(df_ai)-1, 'disposable_income']/df_ai.loc[0, 'disposable_income'])*100:.1f}%")
 
+    print("\n[6. Fertility Decline Mediation Effects]")
+    # Find values at low fertility (n_t = 0.5)
+    idx_low_fert = df_fert_med['n_t'].idxmin()
+    direct_val = df_fert_med.loc[idx_low_fert, 'direct']
+    future_aging_val = df_fert_med.loc[idx_low_fert, 'future_aging_med']
+    per_capita_val = df_fert_med.loc[idx_low_fert, 'per_capita_med']
+    human_capital_val = df_fert_med.loc[idx_low_fert, 'human_capital_med']
+    total_val = df_fert_med.loc[idx_low_fert, 'total']
+
+    print(f"  • Fertility range: 2.0 → 0.5")
+    print(f"  • Direct effect contribution: {direct_val:.5f}")
+    print(f"  • Future aging mediation: {future_aging_val:.5f}")
+    print(f"  • Per capita resources mediation: {per_capita_val:.5f}")
+    print(f"  • Human capital mediation: {human_capital_val:.5f}")
+    print(f"  • Total effect (dρ/dn at n=0.5): {total_val:.5f}")
+    print(f"  • All channels reinforce: Fertility decline → Saving rate ↑")
+
     print("\n" + "="*60)
     print("ALL SIMULATIONS COMPLETED!")
     print("="*60)
 
-    return df_hc, df_med, df_saving, df_fert, df_ai
+    return df_hc, df_med, df_saving, df_fert, df_ai, df_fert_med
 
 
 if __name__ == "__main__":
-    df_hc, df_med, df_saving, df_fert, df_ai = main()
+    df_hc, df_med, df_saving, df_fert, df_ai, df_fert_med = main()
