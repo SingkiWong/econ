@@ -322,6 +322,173 @@ class OLGModel:
 
         return pd.DataFrame(results)
 
+    def simulate_fertility_decline_aging(self):
+        """
+        Simulation 4: Fertility Decline Leads to Aging and Higher Saving Rate
+        模拟4：少子化导致老龄化加剧，最终提升储蓄率
+
+        Mechanism (机制):
+        1. Fertility decline (生育率下降) n_t ↓
+        2. Future old-age dependency rises (未来老年抚养比上升) D_{t+k} ↑
+        3. Precautionary saving increases (预防性储蓄增加) ρ_t ↑
+        4. Current child burden decreases (当期抚养负担减轻) C_t ↓ → ρ_t ↑
+        """
+        # Time periods: simulate 50 years (时间周期：模拟50年)
+        periods = 50
+
+        # Fertility decline scenario: from 1.5 to 0.5 over 30 years
+        # 生育率下降情景：30年内从1.5降至0.5
+        fertility_path = np.concatenate([
+            np.linspace(1.5, 0.5, 30),  # Decline phase (下降阶段)
+            np.ones(20) * 0.5            # Stable low phase (稳定低位)
+        ])
+
+        # Initialize tracking variables (初始化追踪变量)
+        results = {
+            'period': [],
+            'fertility_rate': [],        # n_t
+            'child_dependency': [],      # C_t = n_t
+            'old_dependency': [],        # D_t = 1/n_{t-1}
+            'saving_rate': [],
+            'support_burden': [],        # τ_o
+            'future_aging_pressure': []  # Forward-looking measure
+        }
+
+        # Historical fertility for initial old-age dependency
+        # 历史生育率用于初始老年抚养比
+        n_history = [1.5, 1.5, 1.4, 1.3, 1.2]
+
+        omega_t = 1.0
+        h_t = 1.0
+        r_t_plus_1 = 0.10
+
+        for t in range(periods):
+            # Current fertility
+            n_t = fertility_path[t]
+
+            # Old-age dependency based on past fertility
+            # 基于过去生育率的老年抚养比
+            if t == 0:
+                n_prev = n_history[-1]
+            else:
+                n_prev = fertility_path[t-1]
+            D_t = 1.0 / n_prev if n_prev > 0 else 2.0
+
+            # Child dependency
+            C_t = n_t
+
+            # Future aging pressure: average D over next 20 years
+            # 未来老龄化压力：未来20年D的平均值
+            future_n = fertility_path[t:min(t+20, periods)] if t < periods-20 else fertility_path[t:]
+            future_D = np.mean(1.0 / np.maximum(future_n, 0.3))
+
+            # Compute saving rate
+            rho_t = self.compute_saving_rate(D_t, C_t, omega_t, h_t, r_t_plus_1)
+
+            # Support burden
+            tau_o = self.endogenous_support_expenditure(D_t, self.rho_pen)
+
+            results['period'].append(t)
+            results['fertility_rate'].append(n_t)
+            results['child_dependency'].append(C_t)
+            results['old_dependency'].append(D_t)
+            results['saving_rate'].append(rho_t)
+            results['support_burden'].append(tau_o)
+            results['future_aging_pressure'].append(future_D)
+
+        return pd.DataFrame(results)
+
+    def simulate_ai_labor_substitution(self):
+        """
+        Simulation 5: AI Development Reduces Saving Rate via Labor Substitution
+        模拟5：人工智能发展通过劳动替代效应降低储蓄率
+
+        Mechanism (机制):
+        1. AI adoption increases (AI应用增加) α_AI ↑
+        2. Labor income share decreases (劳动收入份额下降) (1-α_AI)·w·h·l ↓
+        3. Capital income share increases (资本收入份额上升) but concentrated
+        4. Household disposable income falls (家庭可支配收入下降) Y_d ↓
+        5. Saving rate decreases (储蓄率下降) ρ_t ↓
+
+        Additional channel (额外渠道):
+        - AI reduces care time needs (AI降低照料时间需求) τ_o^time ↓
+        - But labor income loss dominates (但劳动收入损失占主导)
+        """
+        # AI adoption levels: from 0% to 80% over 30 years
+        # AI应用水平：30年内从0%到80%
+        ai_adoption = np.linspace(0.0, 0.8, 30)
+
+        # Baseline parameters
+        D_t = 1.0  # Medium aging (中度老龄化)
+        C_t = 0.8  # Low fertility (低生育率)
+        omega_t = 1.0
+        h_t = 1.0
+        r_t_plus_1 = 0.10
+
+        results = {
+            'ai_adoption': [],           # α_AI: AI替代率
+            'labor_income_share': [],    # Labor share after AI
+            'capital_income_share': [],  # Capital share (increases with AI)
+            'disposable_income': [],     # Y_d
+            'saving_rate': [],           # ρ_t
+            'care_time': [],             # τ_o^time (reduced by AI)
+            'employment_rate': []        # Employment level
+        }
+
+        for alpha_ai in ai_adoption:
+            # Labor income reduced by AI substitution
+            # AI替代导致劳动收入下降
+            labor_share = 1 - alpha_ai  # Remaining labor share
+            effective_labor_income = labor_share * omega_t * h_t * 0.7  # 0.7 is baseline labor time
+
+            # Capital income increases (but not equally distributed)
+            # 资本收入增加（但分配不均）
+            # Assume households own limited capital, most goes to corporations
+            # 假设家庭拥有有限资本，大部分流向企业
+            capital_share = alpha_ai
+            household_capital_income = 0.2 * capital_share * omega_t * h_t  # Only 20% goes to households
+
+            # Total disposable income (税后)
+            Y_d = (1 - self.tau) * (effective_labor_income + household_capital_income)
+
+            # AI reduces care time needs (AI助老服务)
+            # AI eldercare assistance reduces ν_1
+            ai_care_reduction = 0.5 * alpha_ai  # AI can reduce care needs by up to 50% at full adoption
+            adjusted_nu_1 = self.nu_1 * (1 - ai_care_reduction)
+            tau_o_time = self.tau_o_time_0 + adjusted_nu_1 * D_t * (1 - self.H_t)
+
+            # Compute saving rate with adjusted income
+            # Modified savings calculation accounting for income loss
+            tau_o = self.endogenous_support_expenditure(D_t, self.rho_pen)
+
+            # Simplified saving rate: more sensitive to income loss
+            # Transfers as fraction of reduced income
+            b_t = 0.12 * omega_t * h_t  # Inheritance unchanged
+            e_t = 0.03 * omega_t * h_t
+            TR_t = tau_o * effective_labor_income + C_t * e_t - b_t
+
+            tau_TR_t = TR_t / Y_d if Y_d > 0.01 else 0.9
+            tau_TR_t_plus_1 = tau_TR_t * (1 + 0.05 * (D_t - 1))
+            g = 0.025
+
+            term1 = (self.beta * (1 - tau_TR_t)) / (1 + self.beta)
+            term2 = ((1 + g) * (1 - tau_TR_t_plus_1)) / ((1 + self.beta) * (1 + r_t_plus_1))
+            rho_t = term1 - term2
+            rho_t = max(min(rho_t, 0.5), -0.2)
+
+            # Employment rate (就业率)
+            employment = labor_share
+
+            results['ai_adoption'].append(alpha_ai * 100)  # Convert to percentage
+            results['labor_income_share'].append(labor_share)
+            results['capital_income_share'].append(capital_share)
+            results['disposable_income'].append(Y_d)
+            results['saving_rate'].append(rho_t)
+            results['care_time'].append(tau_o_time)
+            results['employment_rate'].append(employment)
+
+        return pd.DataFrame(results)
+
 
 def plot_human_capital_sensitivity(df_hc):
     """
@@ -499,6 +666,148 @@ def plot_saving_rate_aging(df_saving):
     return fig
 
 
+def plot_fertility_decline_aging(df_fert):
+    """
+    Visualization 4: Fertility Decline Leads to Aging and Higher Saving Rate
+    可视化4：少子化导致老龄化加剧，最终提升储蓄率
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # Subplot 1: Fertility rate and dependency ratios over time
+    ax1_1 = axes[0, 0]
+    ax1_2 = ax1_1.twinx()
+
+    line1 = ax1_1.plot(df_fert['period'], df_fert['fertility_rate'], 'b-', linewidth=2.5, label='Fertility Rate $n_t$')
+    line2 = ax1_2.plot(df_fert['period'], df_fert['child_dependency'], 'g--', linewidth=2, label='Child Dependency $C_t$')
+    line3 = ax1_2.plot(df_fert['period'], df_fert['old_dependency'], 'r-.', linewidth=2, label='Old-Age Dependency $D_t$')
+
+    ax1_1.set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    ax1_1.set_ylabel('Fertility Rate $n_t$', fontsize=12, color='b')
+    ax1_2.set_ylabel('Dependency Ratios / 抚养比', fontsize=12, color='black')
+    ax1_1.set_title('(a) Fertility Decline and Rising Old-Age Dependency\n少子化与老龄化加剧', fontsize=13, fontweight='bold')
+    ax1_1.tick_params(axis='y', labelcolor='b')
+
+    lines = line1 + line2 + line3
+    labels = [l.get_label() for l in lines]
+    ax1_1.legend(lines, labels, fontsize=10, loc='upper right')
+    ax1_1.grid(True, alpha=0.3)
+
+    # Subplot 2: Saving rate evolution
+    axes[0, 1].plot(df_fert['period'], df_fert['saving_rate']*100, 'purple', linewidth=2.5)
+    axes[0, 1].fill_between(df_fert['period'], 0, df_fert['saving_rate']*100, alpha=0.2, color='purple')
+    axes[0, 1].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[0, 1].set_ylabel('Household Saving Rate $\\rho_t$ (%)', fontsize=12)
+    axes[0, 1].set_title('(b) Saving Rate Evolution with Fertility Decline\n储蓄率随少子化演变', fontsize=13, fontweight='bold')
+    axes[0, 1].grid(True, alpha=0.3)
+    axes[0, 1].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
+
+    # Add annotation
+    max_idx = df_fert['saving_rate'].idxmax()
+    max_period = df_fert.loc[max_idx, 'period']
+    max_rate = df_fert.loc[max_idx, 'saving_rate'] * 100
+    axes[0, 1].annotate(f'Peak: {max_rate:.2f}%\nat year {max_period}',
+                        xy=(max_period, max_rate), xytext=(max_period-10, max_rate+0.5),
+                        arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
+                        fontsize=10, color='red')
+
+    # Subplot 3: Support burden evolution
+    axes[1, 0].plot(df_fert['period'], df_fert['support_burden']*100, 'orange', linewidth=2.5)
+    axes[1, 0].fill_between(df_fert['period'], 0, df_fert['support_burden']*100, alpha=0.2, color='orange')
+    axes[1, 0].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[1, 0].set_ylabel('Support Expenditure Ratio $\\tau_o$ (%)', fontsize=12)
+    axes[1, 0].set_title('(c) Rising Support Burden with Aging\n赡养负担随老龄化上升', fontsize=13, fontweight='bold')
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Subplot 4: Future aging pressure
+    axes[1, 1].plot(df_fert['period'], df_fert['future_aging_pressure'], 'teal', linewidth=2.5)
+    axes[1, 1].fill_between(df_fert['period'], 0, df_fert['future_aging_pressure'], alpha=0.2, color='teal')
+    axes[1, 1].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[1, 1].set_ylabel('Future Aging Pressure\n(20-year forward $D_t$ avg)', fontsize=12)
+    axes[1, 1].set_title('(d) Forward-Looking Aging Pressure\n前瞻性老龄化压力', fontsize=13, fontweight='bold')
+    axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('/home/user/econ/figure4_fertility_decline.png', dpi=300, bbox_inches='tight')
+    print("✓ Figure 4 saved: figure4_fertility_decline.png")
+    return fig
+
+
+def plot_ai_labor_substitution(df_ai):
+    """
+    Visualization 5: AI Development Reduces Saving Rate via Labor Substitution
+    可视化5：人工智能发展通过劳动替代效应降低储蓄率
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # Subplot 1: AI adoption and income composition
+    ax1 = axes[0, 0]
+    ax1.fill_between(df_ai['ai_adoption'], 0, df_ai['labor_income_share']*100,
+                     alpha=0.6, color='#2ca02c', label='Labor Income Share')
+    ax1.fill_between(df_ai['ai_adoption'], df_ai['labor_income_share']*100,
+                     (df_ai['labor_income_share'] + df_ai['capital_income_share'])*100,
+                     alpha=0.6, color='#ff7f0e', label='Capital Income Share')
+    ax1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    ax1.set_ylabel('Income Share (%) / 收入份额', fontsize=12)
+    ax1.set_title('(a) Income Composition with AI Development\nAI发展下的收入构成变化', fontsize=13, fontweight='bold')
+    ax1.legend(fontsize=11, loc='right')
+    ax1.grid(True, alpha=0.3)
+
+    # Subplot 2: Disposable income and employment
+    ax2_1 = axes[0, 1]
+    ax2_2 = ax2_1.twinx()
+
+    line1 = ax2_1.plot(df_ai['ai_adoption'], df_ai['disposable_income'], 'b-', linewidth=2.5, label='Disposable Income $Y_d$')
+    line2 = ax2_2.plot(df_ai['ai_adoption'], df_ai['employment_rate']*100, 'r--', linewidth=2.5, label='Employment Rate (%)')
+
+    ax2_1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    ax2_1.set_ylabel('Household Disposable Income $Y_d$', fontsize=12, color='b')
+    ax2_2.set_ylabel('Employment Rate (%) / 就业率', fontsize=12, color='r')
+    ax2_1.set_title('(b) Income Loss and Employment Decline\n收入损失与就业下降', fontsize=13, fontweight='bold')
+    ax2_1.tick_params(axis='y', labelcolor='b')
+    ax2_2.tick_params(axis='y', labelcolor='r')
+
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax2_1.legend(lines, labels, fontsize=10, loc='upper right')
+    ax2_1.grid(True, alpha=0.3)
+
+    # Subplot 3: Saving rate decline
+    axes[1, 0].plot(df_ai['ai_adoption'], df_ai['saving_rate']*100, 'purple', linewidth=3, marker='o', markersize=4)
+    axes[1, 0].fill_between(df_ai['ai_adoption'], 0, df_ai['saving_rate']*100, alpha=0.2, color='purple')
+    axes[1, 0].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    axes[1, 0].set_ylabel('Household Saving Rate $\\rho_t$ (%)', fontsize=12)
+    axes[1, 0].set_title('(c) Declining Saving Rate with AI Substitution\n储蓄率随AI替代下降', fontsize=13, fontweight='bold')
+    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
+
+    # Add annotation
+    initial_rate = df_ai.loc[0, 'saving_rate'] * 100
+    final_rate = df_ai.loc[len(df_ai)-1, 'saving_rate'] * 100
+    decline = initial_rate - final_rate
+    axes[1, 0].text(0.6, 0.95, f'Total Decline: {decline:.2f}pp\n总下降: {decline:.2f}个百分点',
+                    transform=axes[1, 0].transAxes, fontsize=11, verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.3))
+
+    # Subplot 4: AI care assistance benefit
+    axes[1, 1].plot(df_ai['ai_adoption'], df_ai['care_time'], 'teal', linewidth=2.5)
+    axes[1, 1].fill_between(df_ai['ai_adoption'], 0, df_ai['care_time'], alpha=0.2, color='teal')
+    axes[1, 1].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    axes[1, 1].set_ylabel('Care Time Requirement $\\tau_o^{time}$', fontsize=12)
+    axes[1, 1].set_title('(d) AI Elderly Care Assistance (Partial Offset)\nAI助老服务（部分抵消）', fontsize=13, fontweight='bold')
+    axes[1, 1].grid(True, alpha=0.3)
+
+    # Add annotation
+    care_reduction = (df_ai.loc[0, 'care_time'] - df_ai.loc[len(df_ai)-1, 'care_time']) / df_ai.loc[0, 'care_time'] * 100
+    axes[1, 1].text(0.6, 0.95, f'Care Time Reduction: {care_reduction:.1f}%\n照料时间减少: {care_reduction:.1f}%',
+                    transform=axes[1, 1].transAxes, fontsize=11, verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
+
+    plt.tight_layout()
+    plt.savefig('/home/user/econ/figure5_ai_substitution.png', dpi=300, bbox_inches='tight')
+    print("✓ Figure 5 saved: figure5_ai_substitution.png")
+    return fig
+
+
 def main():
     """
     Main Function: Run All Numerical Simulations
@@ -523,6 +832,14 @@ def main():
     df_saving = model.simulate_saving_rate_aging()
     print(f"    Done! Generated {len(df_saving)} data points")
 
+    print("\n[4] Simulating fertility decline and future aging...")
+    df_fert = model.simulate_fertility_decline_aging()
+    print(f"    Done! Generated {len(df_fert)} data points (50-year projection)")
+
+    print("\n[5] Simulating AI labor substitution effects...")
+    df_ai = model.simulate_ai_labor_substitution()
+    print(f"    Done! Generated {len(df_ai)} data points")
+
     print("\n" + "="*60)
     print("Generating visualizations...")
     print("="*60)
@@ -531,6 +848,8 @@ def main():
     fig1 = plot_human_capital_sensitivity(df_hc)
     fig2 = plot_mediation_effects(df_med)
     fig3 = plot_saving_rate_aging(df_saving)
+    fig4 = plot_fertility_decline_aging(df_fert)
+    fig5 = plot_ai_labor_substitution(df_ai)
 
     # Save data
     print("\nSaving simulation data...")
@@ -542,6 +861,12 @@ def main():
 
     df_saving.to_csv('/home/user/econ/data_saving_rate.csv', index=False)
     print("✓ Data saved: data_saving_rate.csv")
+
+    df_fert.to_csv('/home/user/econ/data_fertility_decline.csv', index=False)
+    print("✓ Data saved: data_fertility_decline.csv")
+
+    df_ai.to_csv('/home/user/econ/data_ai_substitution.csv', index=False)
+    print("✓ Data saved: data_ai_substitution.csv")
 
     print("\n" + "="*60)
     print("SIMULATION RESULTS SUMMARY")
@@ -562,17 +887,31 @@ def main():
     print(f"  • Support risk mediation: {df_med.loc[idx_mid, 'risk_med']:.5f} (positive)")
     print(f"  • Total effect: {df_med.loc[idx_mid, 'total']:.5f}")
 
-    print("\n[3. Saving Rate]")
+    print("\n[3. Saving Rate and Population Structure]")
     print(f"  • Minimum saving rate: {df_saving['saving_rate'].min():.4f} (low aging)")
     print(f"  • Maximum saving rate: {df_saving['saving_rate'].max():.4f} (high aging)")
     print(f"  • Average saving rate: {df_saving['saving_rate'].mean():.4f}")
+
+    print("\n[4. Fertility Decline and Future Aging]")
+    print(f"  • Initial fertility rate: {df_fert.loc[0, 'fertility_rate']:.2f}")
+    print(f"  • Final fertility rate: {df_fert.loc[len(df_fert)-1, 'fertility_rate']:.2f}")
+    print(f"  • Peak saving rate: {df_fert['saving_rate'].max()*100:.2f}% at year {df_fert.loc[df_fert['saving_rate'].idxmax(), 'period']:.0f}")
+    print(f"  • Old-age dependency increase: {df_fert.loc[0, 'old_dependency']:.2f} → {df_fert.loc[len(df_fert)-1, 'old_dependency']:.2f}")
+
+    print("\n[5. AI Labor Substitution]")
+    initial_sr_ai = df_ai.loc[0, 'saving_rate'] * 100
+    final_sr_ai = df_ai.loc[len(df_ai)-1, 'saving_rate'] * 100
+    print(f"  • AI adoption range: 0% → 80%")
+    print(f"  • Saving rate decline: {initial_sr_ai:.2f}% → {final_sr_ai:.2f}% ({initial_sr_ai-final_sr_ai:.2f}pp drop)")
+    print(f"  • Employment rate decline: 100% → {df_ai.loc[len(df_ai)-1, 'employment_rate']*100:.1f}%")
+    print(f"  • Disposable income loss: {(1-df_ai.loc[len(df_ai)-1, 'disposable_income']/df_ai.loc[0, 'disposable_income'])*100:.1f}%")
 
     print("\n" + "="*60)
     print("ALL SIMULATIONS COMPLETED!")
     print("="*60)
 
-    return df_hc, df_med, df_saving
+    return df_hc, df_med, df_saving, df_fert, df_ai
 
 
 if __name__ == "__main__":
-    df_hc, df_med, df_saving = main()
+    df_hc, df_med, df_saving, df_fert, df_ai = main()
