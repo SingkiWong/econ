@@ -681,10 +681,10 @@ def plot_fertility_decline_aging(df_fert):
     line2 = ax1_2.plot(df_fert['period'], df_fert['child_dependency'], 'g--', linewidth=2, label='Child Dependency $C_t$')
     line3 = ax1_2.plot(df_fert['period'], df_fert['old_dependency'], 'r-.', linewidth=2, label='Old-Age Dependency $D_t$')
 
-    ax1_1.set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    ax1_1.set_xlabel('Period (Years)', fontsize=12)
     ax1_1.set_ylabel('Fertility Rate $n_t$', fontsize=12, color='b')
-    ax1_2.set_ylabel('Dependency Ratios / 抚养比', fontsize=12, color='black')
-    ax1_1.set_title('(a) Fertility Decline and Rising Old-Age Dependency\n少子化与老龄化加剧', fontsize=13, fontweight='bold')
+    ax1_2.set_ylabel('Dependency Ratios', fontsize=12, color='black')
+    ax1_1.set_title('(a) Fertility Decline and Rising Old-Age Dependency', fontsize=13, fontweight='bold')
     ax1_1.tick_params(axis='y', labelcolor='b')
 
     lines = line1 + line2 + line3
@@ -695,9 +695,9 @@ def plot_fertility_decline_aging(df_fert):
     # Subplot 2: Saving rate evolution
     axes[0, 1].plot(df_fert['period'], df_fert['saving_rate']*100, 'purple', linewidth=2.5)
     axes[0, 1].fill_between(df_fert['period'], 0, df_fert['saving_rate']*100, alpha=0.2, color='purple')
-    axes[0, 1].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[0, 1].set_xlabel('Period (Years)', fontsize=12)
     axes[0, 1].set_ylabel('Household Saving Rate $\\rho_t$ (%)', fontsize=12)
-    axes[0, 1].set_title('(b) Saving Rate Evolution with Fertility Decline\n储蓄率随少子化演变', fontsize=13, fontweight='bold')
+    axes[0, 1].set_title('(b) Saving Rate Evolution with Fertility Decline', fontsize=13, fontweight='bold')
     axes[0, 1].grid(True, alpha=0.3)
     axes[0, 1].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
 
@@ -713,17 +713,17 @@ def plot_fertility_decline_aging(df_fert):
     # Subplot 3: Support burden evolution
     axes[1, 0].plot(df_fert['period'], df_fert['support_burden']*100, 'orange', linewidth=2.5)
     axes[1, 0].fill_between(df_fert['period'], 0, df_fert['support_burden']*100, alpha=0.2, color='orange')
-    axes[1, 0].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[1, 0].set_xlabel('Period (Years)', fontsize=12)
     axes[1, 0].set_ylabel('Support Expenditure Ratio $\\tau_o$ (%)', fontsize=12)
-    axes[1, 0].set_title('(c) Rising Support Burden with Aging\n赡养负担随老龄化上升', fontsize=13, fontweight='bold')
+    axes[1, 0].set_title('(c) Rising Support Burden with Aging', fontsize=13, fontweight='bold')
     axes[1, 0].grid(True, alpha=0.3)
 
     # Subplot 4: Future aging pressure
     axes[1, 1].plot(df_fert['period'], df_fert['future_aging_pressure'], 'teal', linewidth=2.5)
     axes[1, 1].fill_between(df_fert['period'], 0, df_fert['future_aging_pressure'], alpha=0.2, color='teal')
-    axes[1, 1].set_xlabel('Period (Years) / 时期（年）', fontsize=12)
+    axes[1, 1].set_xlabel('Period (Years)', fontsize=12)
     axes[1, 1].set_ylabel('Future Aging Pressure\n(20-year forward $D_t$ avg)', fontsize=12)
-    axes[1, 1].set_title('(d) Forward-Looking Aging Pressure\n前瞻性老龄化压力', fontsize=13, fontweight='bold')
+    axes[1, 1].set_title('(d) Forward-Looking Aging Pressure', fontsize=13, fontweight='bold')
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -746,9 +746,9 @@ def plot_ai_labor_substitution(df_ai):
     ax1.fill_between(df_ai['ai_adoption'], df_ai['labor_income_share']*100,
                      (df_ai['labor_income_share'] + df_ai['capital_income_share'])*100,
                      alpha=0.6, color='#ff7f0e', label='Capital Income Share')
-    ax1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
-    ax1.set_ylabel('Income Share (%) / 收入份额', fontsize=12)
-    ax1.set_title('(a) Income Composition with AI Development\nAI发展下的收入构成变化', fontsize=13, fontweight='bold')
+    ax1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)', fontsize=12)
+    ax1.set_ylabel('Income Share (%)', fontsize=12)
+    ax1.set_title('(a) Income Composition with AI Development', fontsize=13, fontweight='bold')
     ax1.legend(fontsize=11, loc='right')
     ax1.grid(True, alpha=0.3)
 
@@ -759,10 +759,10 @@ def plot_ai_labor_substitution(df_ai):
     line1 = ax2_1.plot(df_ai['ai_adoption'], df_ai['disposable_income'], 'b-', linewidth=2.5, label='Disposable Income $Y_d$')
     line2 = ax2_2.plot(df_ai['ai_adoption'], df_ai['employment_rate']*100, 'r--', linewidth=2.5, label='Employment Rate (%)')
 
-    ax2_1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    ax2_1.set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)', fontsize=12)
     ax2_1.set_ylabel('Household Disposable Income $Y_d$', fontsize=12, color='b')
-    ax2_2.set_ylabel('Employment Rate (%) / 就业率', fontsize=12, color='r')
-    ax2_1.set_title('(b) Income Loss and Employment Decline\n收入损失与就业下降', fontsize=13, fontweight='bold')
+    ax2_2.set_ylabel('Employment Rate (%)', fontsize=12, color='r')
+    ax2_1.set_title('(b) Income Loss and Employment Decline', fontsize=13, fontweight='bold')
     ax2_1.tick_params(axis='y', labelcolor='b')
     ax2_2.tick_params(axis='y', labelcolor='r')
 
@@ -774,9 +774,9 @@ def plot_ai_labor_substitution(df_ai):
     # Subplot 3: Saving rate decline
     axes[1, 0].plot(df_ai['ai_adoption'], df_ai['saving_rate']*100, 'purple', linewidth=3, marker='o', markersize=4)
     axes[1, 0].fill_between(df_ai['ai_adoption'], 0, df_ai['saving_rate']*100, alpha=0.2, color='purple')
-    axes[1, 0].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    axes[1, 0].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)', fontsize=12)
     axes[1, 0].set_ylabel('Household Saving Rate $\\rho_t$ (%)', fontsize=12)
-    axes[1, 0].set_title('(c) Declining Saving Rate with AI Substitution\n储蓄率随AI替代下降', fontsize=13, fontweight='bold')
+    axes[1, 0].set_title('(c) Declining Saving Rate with AI Substitution', fontsize=13, fontweight='bold')
     axes[1, 0].grid(True, alpha=0.3)
     axes[1, 0].axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.3)
 
@@ -784,21 +784,21 @@ def plot_ai_labor_substitution(df_ai):
     initial_rate = df_ai.loc[0, 'saving_rate'] * 100
     final_rate = df_ai.loc[len(df_ai)-1, 'saving_rate'] * 100
     decline = initial_rate - final_rate
-    axes[1, 0].text(0.6, 0.95, f'Total Decline: {decline:.2f}pp\n总下降: {decline:.2f}个百分点',
+    axes[1, 0].text(0.6, 0.95, f'Total Decline: {decline:.2f}pp',
                     transform=axes[1, 0].transAxes, fontsize=11, verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.3))
 
     # Subplot 4: AI care assistance benefit
     axes[1, 1].plot(df_ai['ai_adoption'], df_ai['care_time'], 'teal', linewidth=2.5)
     axes[1, 1].fill_between(df_ai['ai_adoption'], 0, df_ai['care_time'], alpha=0.2, color='teal')
-    axes[1, 1].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)\nAI应用率', fontsize=12)
+    axes[1, 1].set_xlabel('AI Adoption Rate $\\alpha_{AI}$ (%)', fontsize=12)
     axes[1, 1].set_ylabel('Care Time Requirement $\\tau_o^{time}$', fontsize=12)
-    axes[1, 1].set_title('(d) AI Elderly Care Assistance (Partial Offset)\nAI助老服务（部分抵消）', fontsize=13, fontweight='bold')
+    axes[1, 1].set_title('(d) AI Elderly Care Assistance (Partial Offset)', fontsize=13, fontweight='bold')
     axes[1, 1].grid(True, alpha=0.3)
 
     # Add annotation
     care_reduction = (df_ai.loc[0, 'care_time'] - df_ai.loc[len(df_ai)-1, 'care_time']) / df_ai.loc[0, 'care_time'] * 100
-    axes[1, 1].text(0.6, 0.95, f'Care Time Reduction: {care_reduction:.1f}%\n照料时间减少: {care_reduction:.1f}%',
+    axes[1, 1].text(0.6, 0.95, f'Care Time Reduction: {care_reduction:.1f}%',
                     transform=axes[1, 1].transAxes, fontsize=11, verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
 
